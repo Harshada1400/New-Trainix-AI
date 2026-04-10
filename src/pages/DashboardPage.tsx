@@ -153,7 +153,7 @@ const DashboardPage = () => {
                 </div>
                 <div className="flex-1 min-w-0">
                   <p className="font-medium text-foreground">{week.title}</p>
-                  <p className="text-sm text-muted-foreground">{topic.title} · Week {week.week} · {week.duration}</p>
+                  <p className="text-sm text-muted-foreground">{topic.title} · Week {week.week} · {<p className="text-sm text-muted-foreground">{topic.title} · Week {week.week}</p>}</p>
                 </div>
                 <ChevronRight className="w-4 h-4 text-muted-foreground group-hover:text-foreground transition-colors" />
               </motion.div>
