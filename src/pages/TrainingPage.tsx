@@ -14,6 +14,7 @@ import {
   TooltipTrigger,
 } from "@/components/ui/tooltip";
 import { toast } from "sonner";
+import TrainingAssistant from "@/components/TrainingAssistant";
 
 // --- Progress Store (localStorage-backed for demo) ---
 function loadProgress(): Record<string, boolean> {
@@ -113,22 +114,22 @@ const TrainingPage = () => {
     const completed = !!completedMap[dayKey];
 
     return (
-      <div className="p-4 md:p-8 max-w-4xl mx-auto">
-        <button onClick={() => { setSelectedDay(null); resetQuiz(); }} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
+      <div className="p-3 sm:p-4 md:p-8 max-w-4xl mx-auto pb-20">
+      <button onClick={() => { setSelectedDay(null); resetQuiz(); }} className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground mb-4 sm:mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Week {weekNum}
         </button>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
           <div className="flex items-center gap-3 mb-2">
             {completed && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
-            <h1 className="text-2xl font-bold font-display text-foreground">
+            <h1 className="text-lg sm:text-2xl font-bold font-display text-foreground">
               Day {dayNum}: {selectedDay.title}
             </h1>
           </div>
           {completed && <span className="inline-block text-xs font-medium bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full mb-6">Completed</span>}
 
           {/* Reading Content */}
-          <div className="bg-card rounded-xl border border-border p-6 mb-6">
+          <div className="bg-card rounded-xl border border-border p-4 sm:p-6 mb-4 sm:mb-6">
             <div className="flex items-center gap-2 mb-4">
               <BookOpen className="w-5 h-5 text-primary" />
               <h2 className="text-lg font-semibold text-foreground">Concept Reading</h2>
@@ -144,13 +145,13 @@ const TrainingPage = () => {
 
           {/* Code Snippets */}
           {selectedDay.codeSnippets?.map((snippet, i) => (
-            <div key={i} className="bg-card rounded-xl border border-border p-6 mb-6">
+            <div key={i} className="bg-card rounded-xl border border-border p-4 sm:p-6 mb-4 sm:mb-6">
               <div className="flex items-center gap-2 mb-3">
                 <Code2 className="w-5 h-5 text-secondary" />
                 <h3 className="text-md font-semibold text-foreground">{snippet.description}</h3>
                 <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground ml-auto">{snippet.language}</span>
               </div>
-              <pre className="bg-muted/50 rounded-lg p-4 overflow-x-auto text-sm font-mono text-foreground/90 border border-border">
+              <pre className="bg-muted/50 rounded-lg p-3 sm:p-4 overflow-x-auto text-xs sm:text-sm font-mono text-foreground/90 border border-border">
                 <code>{snippet.code}</code>
               </pre>
             </div>
@@ -158,7 +159,7 @@ const TrainingPage = () => {
 
           {/* Hands-on */}
           {selectedDay.handsOn && (
-            <div className="bg-card rounded-xl border border-border p-6 mb-6">
+            <div className="bg-card rounded-xl border border-border p-4 sm:p-6 mb-4 sm:mb-6">
               <div className="flex items-center gap-2 mb-3">
                 <Rocket className="w-5 h-5 text-accent" />
                 <h3 className="text-md font-semibold text-foreground">Hands-On Exercise</h3>
@@ -174,7 +175,7 @@ const TrainingPage = () => {
 
           {/* Mini Project */}
           {selectedDay.miniProject && (
-            <div className="bg-primary/5 rounded-xl border border-primary/20 p-6 mb-6">
+            <div className="bg-primary/5 rounded-xl border border-primary/20 p-4 sm:p-6 mb-4 sm:mb-6">
               <div className="flex items-center gap-2 mb-3">
                 <Trophy className="w-5 h-5 text-primary" />
                 <h3 className="text-md font-semibold text-foreground">Mini Project: {selectedDay.miniProject.title}</h3>
@@ -188,7 +189,7 @@ const TrainingPage = () => {
 
           {/* Quiz Section */}
           {!completed && (
-            <div className="bg-card rounded-xl border border-border p-6">
+            <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
               <div className="flex items-center gap-2 mb-4">
                 <Brain className="w-5 h-5 text-primary" />
                 <h3 className="text-lg font-semibold text-foreground">Day {dayNum} Quiz</h3>
@@ -234,6 +235,7 @@ const TrainingPage = () => {
             </div>
           )}
         </motion.div>
+        <TrainingAssistant />
       </div>
     );
   }
@@ -246,13 +248,13 @@ const TrainingPage = () => {
     const progress = getWeekProgress(selectedWeek.topicId, week);
 
     return (
-      <div className="p-4 md:p-8 max-w-4xl mx-auto">
-        <button onClick={() => setSelectedWeek(null)} className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground mb-6 transition-colors">
+      <div className="p-3 sm:p-4 md:p-8 max-w-4xl mx-auto pb-20">
+        <button onClick={() => setSelectedWeek(null)} className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground mb-4 sm:mb-6 transition-colors">
           <ArrowLeft className="w-4 h-4" /> Back to Curriculum
         </button>
 
         <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-          <h1 className="text-2xl font-bold font-display text-foreground mb-1">
+          <h1 className="text-xl sm:text-2xl font-bold font-display text-foreground mb-1">
             Week {week.week}: {week.title}
           </h1>
           <p className="text-muted-foreground mb-4">{week.description}</p>
@@ -279,7 +281,7 @@ const TrainingPage = () => {
                         transition={{ delay: di * 0.05 }}
                         onClick={() => unlocked ? setSelectedDay(day) : null}
                         disabled={!unlocked}
-                        className={`w-full flex items-center gap-4 p-4 rounded-xl border transition-all text-left
+                        className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-4 rounded-xl border transition-all text-left
                           ${completed
                             ? "bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10"
                             : isCurrent
@@ -287,7 +289,7 @@ const TrainingPage = () => {
                               : "bg-muted/30 border-border opacity-60 cursor-not-allowed"
                           }`}
                       >
-                        <div className={`w-10 h-10 rounded-lg flex items-center justify-center text-sm font-bold shrink-0
+                        <div className={`w-8 h-8 sm:w-10 sm:h-10 rounded-lg flex items-center justify-center text-xs sm:text-sm font-bold shrink-0
                           ${completed ? "bg-emerald-500/10 text-emerald-600" : isCurrent ? "gradient-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                           {completed ? <CheckCircle2 className="w-5 h-5" /> : unlocked ? `D${day.day}` : <Lock className="w-4 h-4" />}
                         </div>
@@ -314,6 +316,7 @@ const TrainingPage = () => {
             })}
           </div>
         </motion.div>
+        <TrainingAssistant />
       </div>
     );
   }
@@ -325,15 +328,15 @@ const TrainingPage = () => {
   const overallPct = Math.round((completedDays / totalDays) * 100);
 
   return (
-    <div className="p-4 md:p-8 max-w-4xl mx-auto">
+    <div className="p-3 sm:p-4 md:p-8 max-w-4xl mx-auto pb-20">
       <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-        <h1 className="text-3xl font-bold font-display text-foreground mb-2">Training Curriculum</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold font-display text-foreground mb-2">Training Curriculum</h1>
         <p className="text-muted-foreground mb-6">
           Complete each week's daily topics in order. Pass the quiz to unlock the next day.
         </p>
 
         {/* Overall Progress */}
-        <div className="bg-card rounded-xl border border-border p-5 mb-8">
+        <div className="bg-card rounded-xl border border-border p-4 sm:p-5 mb-6 sm:mb-8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-foreground">Overall Progress</span>
             <span className="text-sm font-bold text-primary">{overallPct}%</span>
@@ -361,7 +364,7 @@ const TrainingPage = () => {
                     transition={{ delay: wi * 0.06 }}
                     onClick={() => weekUnlocked ? setSelectedWeek({ topicId: topic.id, week }) : null}
                     disabled={!weekUnlocked}
-                    className={`w-full flex items-center gap-4 p-5 rounded-xl border text-left transition-all
+                    className={`w-full flex items-center gap-3 sm:gap-4 p-3 sm:p-5 rounded-xl border text-left transition-all
                       ${weekCompleted
                         ? "bg-emerald-500/5 border-emerald-500/20 hover:bg-emerald-500/10"
                         : weekUnlocked
@@ -369,7 +372,7 @@ const TrainingPage = () => {
                           : "bg-muted/30 border-border opacity-60 cursor-not-allowed"
                       }`}
                   >
-                    <div className={`w-12 h-12 rounded-xl flex items-center justify-center text-sm font-bold shrink-0
+                    <div className={`w-10 h-10 sm:w-12 sm:h-12 rounded-xl flex items-center justify-center text-xs sm:text-sm font-bold shrink-0
                       ${weekCompleted ? "bg-emerald-500/10 text-emerald-600" : weekUnlocked ? "gradient-primary text-primary-foreground" : "bg-muted text-muted-foreground"}`}>
                       {weekCompleted ? <CheckCircle2 className="w-6 h-6" /> : weekUnlocked ? `W${week.week}` : <Lock className="w-5 h-5" />}
                     </div>
@@ -388,7 +391,7 @@ const TrainingPage = () => {
                       )}
                     </div>
 
-                    <div className="flex flex-col items-end gap-1 shrink-0">
+                    <div className="hidden sm:flex flex-col items-end gap-1 shrink-0">
                       {weekCompleted && <span className="text-xs font-medium bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full">Completed ✓</span>}
                       {hasProgress && <span className="text-xs font-medium bg-amber-500/10 text-amber-600 px-3 py-1 rounded-full">In Progress</span>}
                       {!weekUnlocked && <span className="text-xs font-medium bg-muted text-muted-foreground px-3 py-1 rounded-full">Locked 🔒</span>}
@@ -406,6 +409,7 @@ const TrainingPage = () => {
           );
         })}
       </div>
+      <TrainingAssistant />
     </div>
   );
 };
