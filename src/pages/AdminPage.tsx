@@ -26,8 +26,6 @@ const AdminPage = () => {
   const [dragOver, setDragOver] = useState(false);
   const fileInputRef = useRef<HTMLInputElement>(null);
 
-  if (user?.role !== "admin") return <Navigate to="/dashboard" replace />;
-
   const validateFile = (file: File): boolean => {
     const ext = "." + file.name.split(".").pop()?.toLowerCase();
     if (!ACCEPTED_EXTENSIONS.includes(ext) && !ACCEPTED_TYPES.includes(file.type)) {
@@ -43,6 +41,8 @@ const AdminPage = () => {
     const file = e.dataTransfer.files[0];
     if (file && validateFile(file)) setUploadedFile(file);
   }, []);
+
+  if (user?.role !== "admin") return <Navigate to="/dashboard" replace />;
 
   const handleFileSelect = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
