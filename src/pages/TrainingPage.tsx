@@ -1,4 +1,4 @@
-import { useState, useCallback } from "react";
+import { useState, useCallback, useMemo } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { trainingTopics, type WeekModule, type DayContent, type QuizQuestion } from "@/data/trainingData";
 import {
@@ -32,11 +32,26 @@ function saveProgress(p: Record<string, boolean>) {
   localStorage.setItem("trainix-progress", JSON.stringify(p));
 }
 
-const statusColors = {
-  completed: "text-emerald-500",
-  "in-progress": "text-amber-500",
-  locked: "text-muted-foreground/40",
-};
+// --- Shuffle utility ---
+function shuffleArray<T>(arr: T[]): T[] {
+  const shuffled = [...arr];
+  for (let i = shuffled.length - 1; i > 0; i--) {
+    const j = Math.floor(Math.random() * (i + 1));
+    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
+  }
+  return shuffled;
+}
+
+function shuffleQuiz(questions: QuizQuestion[]): QuizQuestion[] {
+  return shuffleArray(questions).map(q => {
+    // Shuffle options and update correctAnswer index
+    const optionIndices = q.options.map((_, i) => i);
+    const shuffledIndices = shuffleArray(optionIndices);
+    const newOptions = shuffledIndices.map(i => q.options[i]);
+    const newCorrect = shuffledIndices.indexOf(q.correctAnswer);
+    return { ...q, options: newOptions, correctAnswer: newCorrect };
+  });
+}
 
 const TrainingPage = () => {
   const [completedMap, setCompletedMap] = useState<Record<string, boolean>>(loadProgress);
@@ -45,6 +60,8 @@ const TrainingPage = () => {
   const [showQuiz, setShowQuiz] = useState(false);
   const [quizAnswers, setQuizAnswers] = useState<Record<string, number>>({});
   const [quizSubmitted, setQuizSubmitted] = useState(false);
+  const [currentQuizIndex, setCurrentQuizIndex] = useState(0);
+  const [shuffledQuiz, setShuffledQuiz] = useState<QuizQuestion[]>([]);
 
   const markComplete = useCallback((key: string) => {
     setCompletedMap((prev) => {
@@ -59,7 +76,6 @@ const TrainingPage = () => {
 
   const isDayUnlocked = (topicId: string, weekNum: number, dayNum: number, weekIndex: number) => {
     if (dayNum === 1) {
-      // First day: unlocked if it's the first week OR previous week completed
       if (weekIndex === 0) return true;
       const topic = trainingTopics.find(t => t.id === topicId);
       if (!topic) return false;
@@ -86,28 +102,51 @@ const TrainingPage = () => {
   };
 
   // --- Quiz Logic ---
-  const handleQuizSubmit = (topicId: string, weekNum: number, dayNum: number) => {
+  const startQuiz = () => {
     if (!selectedDay) return;
-    const correct = selectedDay.quiz.filter(q => quizAnswers[q.id] === q.correctAnswer).length;
-    const total = selectedDay.quiz.length;
-    const passed = correct >= Math.ceil(total * 0.6); // 60% pass
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setCurrentQuizIndex(0);
+    setShuffledQuiz(shuffleQuiz(selectedDay.quiz));
+    setShowQuiz(true);
+  };
+
+  const handleQuizSubmit = (topicId: string, weekNum: number, dayNum: number) => {
+    if (!selectedDay || shuffledQuiz.length === 0) return;
+    const correct = shuffledQuiz.filter(q => quizAnswers[q.id] === q.correctAnswer).length;
+    const total = shuffledQuiz.length;
+    const passed = correct >= Math.ceil(total * 0.6);
 
     setQuizSubmitted(true);
 
     if (passed) {
       const key = `${topicId}-w${weekNum}-d${dayNum}`;
       markComplete(key);
-      toast.success(`Day ${dayNum} completed successfully! ${dayNum < 5 ? `You can now proceed to Day ${dayNum + 1}.` : "Week completed! 🎉"}`);
+      toast.success(`Day ${dayNum} completed! ${dayNum < 5 ? `Day ${dayNum + 1} unlocked.` : "Week completed! 🎉"}`);
     } else {
-      toast.error(`You scored ${correct}/${total}. You need at least ${Math.ceil(total * 0.6)} correct answers. Try again!`);
+      toast.error(`You scored ${correct}/${total}. Need ${Math.ceil(total * 0.6)} to pass. Try again!`);
     }
+  };
+
+  const retryQuiz = () => {
+    if (!selectedDay) return;
+    setQuizAnswers({});
+    setQuizSubmitted(false);
+    setCurrentQuizIndex(0);
+    setShuffledQuiz(shuffleQuiz(selectedDay.quiz));
   };
 
   const resetQuiz = () => {
     setQuizAnswers({});
     setQuizSubmitted(false);
     setShowQuiz(false);
+    setCurrentQuizIndex(0);
+    setShuffledQuiz([]);
   };
+
+  // Current quiz question
+  const currentQuestion = shuffledQuiz[currentQuizIndex];
+  const allAnswered = shuffledQuiz.length > 0 && Object.keys(quizAnswers).length >= shuffledQuiz.length;
 
   // --- VIEWS ---
 
@@ -121,150 +160,235 @@ const TrainingPage = () => {
 
     return (
       <div className="flex h-full">
-        {/* Main content */}
-        <div className="flex-1 p-3 sm:p-4 md:p-8 max-w-4xl mx-auto pb-20 overflow-y-auto">
-          <button onClick={() => { setSelectedDay(null); resetQuiz(); }} className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground mb-4 sm:mb-6 transition-colors">
-            <ArrowLeft className="w-4 h-4" /> Back to Week {weekNum}
-          </button>
+        {/* Main content - adjusts width for chatbot sidebar */}
+        <div className="flex-1 min-w-0 p-3 sm:p-4 md:p-8 pb-20 overflow-y-auto">
+          <div className="max-w-4xl mx-auto">
+            <button onClick={() => { setSelectedDay(null); resetQuiz(); }} className="flex items-center gap-2 text-xs sm:text-sm text-muted-foreground hover:text-foreground mb-4 sm:mb-6 transition-colors">
+              <ArrowLeft className="w-4 h-4" /> Back to Week {weekNum}
+            </button>
 
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
-            <div className="flex items-center gap-3 mb-2">
-              {completed && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
-              <h1 className="text-lg sm:text-2xl font-bold font-display text-foreground">
-                Day {dayNum}: {selectedDay.title}
-              </h1>
-            </div>
-            {completed && <span className="inline-block text-xs font-medium bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full mb-6">Completed</span>}
-
-            {/* Reading Content */}
-            <div className="bg-card rounded-xl border border-border p-4 sm:p-6 mb-4 sm:mb-6">
-              <div className="flex items-center gap-2 mb-4">
-                <BookOpen className="w-5 h-5 text-primary" />
-                <h2 className="text-lg font-semibold text-foreground">Concept Reading</h2>
+            <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }}>
+              <div className="flex items-center gap-3 mb-2">
+                {completed && <CheckCircle2 className="w-6 h-6 text-emerald-500" />}
+                <h1 className="text-lg sm:text-2xl font-bold font-display text-foreground">
+                  Day {dayNum}: {selectedDay.title}
+                </h1>
               </div>
-              <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">
-                {selectedDay.readingContent.split("\n").map((line, i) => {
-                  if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-semibold mt-3 mb-1 text-foreground">{line.replace(/\*\*/g, "")}</p>;
-                  if (line.startsWith("- ")) return <li key={i} className="ml-4 list-disc text-foreground/70">{line.slice(2)}</li>;
-                  return <p key={i} className="mb-2">{line}</p>;
-                })}
-              </div>
-            </div>
+              {completed && <span className="inline-block text-xs font-medium bg-emerald-500/10 text-emerald-600 px-3 py-1 rounded-full mb-6">Completed</span>}
 
-            {/* Code Snippets */}
-            {selectedDay.codeSnippets?.map((snippet, i) => (
-              <div key={i} className="bg-card rounded-xl border border-border p-4 sm:p-6 mb-4 sm:mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Code2 className="w-5 h-5 text-secondary" />
-                  <h3 className="text-md font-semibold text-foreground">{snippet.description}</h3>
-                  <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground ml-auto">{snippet.language}</span>
-                </div>
-                <pre className="bg-muted/50 rounded-lg p-3 sm:p-4 overflow-x-auto text-xs sm:text-sm font-mono text-foreground/90 border border-border">
-                  <code>{snippet.code}</code>
-                </pre>
-              </div>
-            ))}
-
-            {/* Hands-on */}
-            {selectedDay.handsOn && (
+              {/* Reading Content */}
               <div className="bg-card rounded-xl border border-border p-4 sm:p-6 mb-4 sm:mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Rocket className="w-5 h-5 text-accent" />
-                  <h3 className="text-md font-semibold text-foreground">Hands-On Exercise</h3>
-                </div>
-                <p className="text-sm text-foreground/70 mb-3">{selectedDay.handsOn.description}</p>
-                {selectedDay.handsOn.link && (
-                  <Button variant="outline" size="sm" asChild>
-                    <a href={selectedDay.handsOn.link} target="_blank" rel="noopener noreferrer">Open Editor</a>
-                  </Button>
-                )}
-              </div>
-            )}
-
-            {/* Mini Project */}
-            {selectedDay.miniProject && (
-              <div className="bg-primary/5 rounded-xl border border-primary/20 p-4 sm:p-6 mb-4 sm:mb-6">
-                <div className="flex items-center gap-2 mb-3">
-                  <Trophy className="w-5 h-5 text-primary" />
-                  <h3 className="text-md font-semibold text-foreground">Mini Project: {selectedDay.miniProject.title}</h3>
-                </div>
-                <p className="text-sm text-foreground/70 mb-4">{selectedDay.miniProject.description}</p>
-                <Button variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/10">
-                  Submit Project
-                </Button>
-              </div>
-            )}
-
-            {/* Quiz Button - opens lightbox */}
-            {!completed && (
-              <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
                 <div className="flex items-center gap-2 mb-4">
-                  <Brain className="w-5 h-5 text-primary" />
-                  <h3 className="text-lg font-semibold text-foreground">Day {dayNum} Quiz</h3>
-                  <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{selectedDay.quiz.length} questions</span>
+                  <BookOpen className="w-5 h-5 text-primary" />
+                  <h2 className="text-lg font-semibold text-foreground">Concept Reading</h2>
                 </div>
-                <div className="text-center py-4">
-                  <p className="text-sm text-muted-foreground mb-4">Complete the quiz to unlock the next day's content.</p>
-                  <Button onClick={() => { resetQuiz(); setShowQuiz(true); }} className="gradient-primary text-primary-foreground shadow-primary-glow">
-                    Start Quiz
-                  </Button>
+                <div className="text-sm text-foreground/80 leading-relaxed whitespace-pre-line">
+                  {selectedDay.readingContent.split("\n").map((line, i) => {
+                    if (line.startsWith("**") && line.endsWith("**")) return <p key={i} className="font-semibold mt-3 mb-1 text-foreground">{line.replace(/\*\*/g, "")}</p>;
+                    if (line.startsWith("- ")) return <li key={i} className="ml-4 list-disc text-foreground/70">{line.slice(2)}</li>;
+                    return <p key={i} className="mb-2">{line}</p>;
+                  })}
                 </div>
               </div>
-            )}
-          </motion.div>
+
+              {/* Code Snippets */}
+              {selectedDay.codeSnippets?.map((snippet, i) => (
+                <div key={i} className="bg-card rounded-xl border border-border p-4 sm:p-6 mb-4 sm:mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Code2 className="w-5 h-5 text-secondary" />
+                    <h3 className="text-md font-semibold text-foreground">{snippet.description}</h3>
+                    <span className="text-xs bg-muted px-2 py-0.5 rounded-full text-muted-foreground ml-auto">{snippet.language}</span>
+                  </div>
+                  <pre className="bg-muted/50 rounded-lg p-3 sm:p-4 overflow-x-auto text-xs sm:text-sm font-mono text-foreground/90 border border-border">
+                    <code>{snippet.code}</code>
+                  </pre>
+                </div>
+              ))}
+
+              {/* Hands-on */}
+              {selectedDay.handsOn && (
+                <div className="bg-card rounded-xl border border-border p-4 sm:p-6 mb-4 sm:mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Rocket className="w-5 h-5 text-accent" />
+                    <h3 className="text-md font-semibold text-foreground">Hands-On Exercise</h3>
+                  </div>
+                  <p className="text-sm text-foreground/70 mb-3">{selectedDay.handsOn.description}</p>
+                  {selectedDay.handsOn.link && (
+                    <Button variant="outline" size="sm" asChild>
+                      <a href={selectedDay.handsOn.link} target="_blank" rel="noopener noreferrer">Open Editor</a>
+                    </Button>
+                  )}
+                </div>
+              )}
+
+              {/* Mini Project */}
+              {selectedDay.miniProject && (
+                <div className="bg-primary/5 rounded-xl border border-primary/20 p-4 sm:p-6 mb-4 sm:mb-6">
+                  <div className="flex items-center gap-2 mb-3">
+                    <Trophy className="w-5 h-5 text-primary" />
+                    <h3 className="text-md font-semibold text-foreground">Mini Project: {selectedDay.miniProject.title}</h3>
+                  </div>
+                  <p className="text-sm text-foreground/70 mb-4">{selectedDay.miniProject.description}</p>
+                  <Button variant="outline" size="sm" className="border-primary/30 text-primary hover:bg-primary/10">
+                    Submit Project
+                  </Button>
+                </div>
+              )}
+
+              {/* Quiz Button */}
+              {!completed && (
+                <div className="bg-card rounded-xl border border-border p-4 sm:p-6">
+                  <div className="flex items-center gap-2 mb-4">
+                    <Brain className="w-5 h-5 text-primary" />
+                    <h3 className="text-lg font-semibold text-foreground">Day {dayNum} Quiz</h3>
+                    <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full">{selectedDay.quiz.length} questions</span>
+                  </div>
+                  <div className="text-center py-4">
+                    <p className="text-sm text-muted-foreground mb-4">Complete the quiz to unlock the next day's content.</p>
+                    <Button onClick={startQuiz} className="gradient-primary text-primary-foreground shadow-primary-glow">
+                      Start Quiz
+                    </Button>
+                  </div>
+                </div>
+              )}
+            </motion.div>
+          </div>
         </div>
 
-        {/* Right-side AI Chatbot */}
-        <div className="hidden lg:block w-[380px] border-l border-border shrink-0">
+        {/* Right-side AI Chatbot - fixed sidebar */}
+        <div className="hidden lg:flex w-[380px] border-l border-border shrink-0 h-full flex-col">
           <InlineChatbot dayTitle={selectedDay.title} />
         </div>
 
-        {/* Mobile: floating chatbot at bottom-right */}
+        {/* Mobile: floating chatbot */}
         <div className="lg:hidden fixed bottom-4 right-4 z-40 w-[calc(100%-2rem)] max-w-[360px]">
           <InlineChatbot dayTitle={selectedDay.title} />
         </div>
 
-        {/* Quiz Lightbox Dialog */}
+        {/* Quiz Lightbox - one question at a time */}
         <Dialog open={showQuiz} onOpenChange={(open) => { if (!open) resetQuiz(); }}>
-          <DialogContent className="max-w-2xl max-h-[85vh] overflow-y-auto">
+          <DialogContent className="max-w-xl">
             <DialogHeader>
               <DialogTitle className="flex items-center gap-2">
                 <Brain className="w-5 h-5 text-primary" />
                 Day {dayNum} Quiz
-                <span className="text-xs bg-primary/10 text-primary px-2 py-0.5 rounded-full ml-2">{selectedDay.quiz.length} questions</span>
               </DialogTitle>
             </DialogHeader>
-            <div className="space-y-6 mt-4">
-              {selectedDay.quiz.map((q, qi) => (
-                <QuizQuestionCard
-                  key={q.id}
-                  question={q}
-                  index={qi}
-                  selected={quizAnswers[q.id]}
-                  onSelect={(val) => setQuizAnswers(prev => ({ ...prev, [q.id]: val }))}
-                  submitted={quizSubmitted}
-                />
-              ))}
-              <div className="flex gap-3 pt-2">
-                {!quizSubmitted ? (
-                  <Button
-                    onClick={() => handleQuizSubmit(topicId, weekNum, dayNum)}
-                    disabled={Object.keys(quizAnswers).length < selectedDay.quiz.length}
-                    className="gradient-primary text-primary-foreground shadow-primary-glow"
+
+            {currentQuestion && !quizSubmitted && (
+              <div className="mt-2">
+                {/* Progress indicator */}
+                <div className="flex items-center justify-between mb-4">
+                  <span className="text-xs text-muted-foreground">
+                    Question {currentQuizIndex + 1} of {shuffledQuiz.length}
+                  </span>
+                  <Progress value={((currentQuizIndex + 1) / shuffledQuiz.length) * 100} className="w-32 h-1.5" />
+                </div>
+
+                <AnimatePresence mode="wait">
+                  <motion.div
+                    key={currentQuestion.id}
+                    initial={{ opacity: 0, x: 20 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    exit={{ opacity: 0, x: -20 }}
+                    transition={{ duration: 0.2 }}
                   >
-                    Submit Quiz
+                    <p className="text-sm font-medium text-foreground mb-4">
+                      {currentQuestion.question}
+                    </p>
+                    <div className="space-y-2">
+                      {currentQuestion.options.map((opt, oi) => {
+                        const isSelected = quizAnswers[currentQuestion.id] === oi;
+                        return (
+                          <button
+                            key={oi}
+                            onClick={() => setQuizAnswers(prev => ({ ...prev, [currentQuestion.id]: oi }))}
+                            className={`w-full text-left text-sm p-3 rounded-lg border transition-all flex items-center gap-3
+                              ${isSelected ? "border-primary bg-primary/5" : "border-border hover:border-primary/30 bg-card"}`}
+                          >
+                            <span className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-medium shrink-0
+                              ${isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30 text-muted-foreground"}`}>
+                              {String.fromCharCode(65 + oi)}
+                            </span>
+                            <span className="text-foreground/80">{opt}</span>
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </motion.div>
+                </AnimatePresence>
+
+                <div className="flex justify-between mt-6">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    disabled={currentQuizIndex === 0}
+                    onClick={() => setCurrentQuizIndex(i => i - 1)}
+                  >
+                    Previous
                   </Button>
-                ) : !completed ? (
-                  <Button onClick={() => { setQuizAnswers({}); setQuizSubmitted(false); }} variant="outline">
-                    Retry Quiz
-                  </Button>
-                ) : (
-                  <Button onClick={resetQuiz} className="gradient-primary text-primary-foreground">
-                    Continue
-                  </Button>
-                )}
+
+                  {currentQuizIndex < shuffledQuiz.length - 1 ? (
+                    <Button
+                      size="sm"
+                      disabled={quizAnswers[currentQuestion.id] === undefined}
+                      onClick={() => setCurrentQuizIndex(i => i + 1)}
+                      className="gradient-primary text-primary-foreground"
+                    >
+                      Next
+                    </Button>
+                  ) : (
+                    <Button
+                      size="sm"
+                      disabled={!allAnswered}
+                      onClick={() => handleQuizSubmit(topicId, weekNum, dayNum)}
+                      className="gradient-primary text-primary-foreground shadow-primary-glow"
+                    >
+                      Submit Quiz
+                    </Button>
+                  )}
+                </div>
               </div>
-            </div>
+            )}
+
+            {/* Results */}
+            {quizSubmitted && (
+              <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} className="mt-2">
+                {completed ? (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 rounded-full bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+                      <Trophy className="w-8 h-8 text-emerald-500" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground mb-2">Quiz Passed! 🎉</h3>
+                    <p className="text-sm text-muted-foreground mb-4">
+                      You scored {shuffledQuiz.filter(q => quizAnswers[q.id] === q.correctAnswer).length}/{shuffledQuiz.length}
+                    </p>
+                    <Button onClick={resetQuiz} className="gradient-primary text-primary-foreground">
+                      Continue
+                    </Button>
+                  </div>
+                ) : (
+                  <div className="text-center py-6">
+                    <div className="w-16 h-16 rounded-full bg-destructive/10 flex items-center justify-center mx-auto mb-4">
+                      <AlertCircle className="w-8 h-8 text-destructive" />
+                    </div>
+                    <h3 className="text-lg font-bold text-foreground mb-2">Not Quite!</h3>
+                    <p className="text-sm text-muted-foreground mb-1">
+                      You scored {shuffledQuiz.filter(q => quizAnswers[q.id] === q.correctAnswer).length}/{shuffledQuiz.length}
+                    </p>
+                    <p className="text-xs text-muted-foreground mb-4">
+                      Need at least {Math.ceil(shuffledQuiz.length * 0.6)} correct answers to pass.
+                    </p>
+                    <div className="flex gap-3 justify-center">
+                      <Button variant="outline" onClick={resetQuiz}>Close</Button>
+                      <Button onClick={retryQuiz} className="gradient-primary text-primary-foreground shadow-primary-glow">
+                        Retry with New Questions
+                      </Button>
+                    </div>
+                  </div>
+                )}
+              </motion.div>
+            )}
           </DialogContent>
         </Dialog>
       </div>
@@ -295,7 +419,6 @@ const TrainingPage = () => {
             <span className="text-sm font-medium text-foreground">{progress.done}/{progress.total} days</span>
           </div>
 
-          {/* Day Tabs */}
           <div className="space-y-3">
             {week.days.map((day, di) => {
               const completed = isDayCompleted(selectedWeek.topicId, week.week, day.day);
@@ -365,7 +488,6 @@ const TrainingPage = () => {
           Complete each week's daily topics in order. Pass the quiz to unlock the next day.
         </p>
 
-        {/* Overall Progress */}
         <div className="bg-card rounded-xl border border-border p-4 sm:p-5 mb-6 sm:mb-8">
           <div className="flex items-center justify-between mb-2">
             <span className="text-sm font-medium text-foreground">Overall Progress</span>
@@ -376,7 +498,6 @@ const TrainingPage = () => {
         </div>
       </motion.div>
 
-      {/* Weeks */}
       <div className="space-y-3">
         {topic.weeks.map((week, wi) => {
           const weekCompleted = isWeekCompleted(topic.id, week);
@@ -439,56 +560,8 @@ const TrainingPage = () => {
           );
         })}
       </div>
-      
     </div>
   );
 };
-
-// --- Quiz Question Card ---
-interface QuizCardProps {
-  question: QuizQuestion;
-  index: number;
-  selected?: number;
-  onSelect: (val: number) => void;
-  submitted: boolean;
-}
-
-const QuizQuestionCard = ({ question, index, selected, onSelect, submitted }: QuizCardProps) => (
-  <div className="bg-muted/30 rounded-lg p-4 border border-border">
-    <p className="text-sm font-medium text-foreground mb-3">
-      {index + 1}. {question.question}
-    </p>
-    <div className="space-y-2">
-      {question.options.map((opt, oi) => {
-        const isSelected = selected === oi;
-        const isCorrect = question.correctAnswer === oi;
-        let optionClass = "border-border hover:border-primary/30 bg-card";
-        if (submitted) {
-          if (isCorrect) optionClass = "border-emerald-500 bg-emerald-500/10";
-          else if (isSelected && !isCorrect) optionClass = "border-destructive bg-destructive/10";
-        } else if (isSelected) {
-          optionClass = "border-primary bg-primary/5";
-        }
-
-        return (
-          <button
-            key={oi}
-            onClick={() => !submitted && onSelect(oi)}
-            disabled={submitted}
-            className={`w-full text-left text-sm p-3 rounded-lg border transition-all flex items-center gap-3 ${optionClass}`}
-          >
-            <span className={`w-6 h-6 rounded-full border flex items-center justify-center text-xs font-medium shrink-0
-              ${isSelected ? "border-primary bg-primary text-primary-foreground" : "border-muted-foreground/30 text-muted-foreground"}`}>
-              {String.fromCharCode(65 + oi)}
-            </span>
-            <span className="text-foreground/80">{opt}</span>
-            {submitted && isCorrect && <CheckCircle2 className="w-4 h-4 text-emerald-500 ml-auto" />}
-            {submitted && isSelected && !isCorrect && <AlertCircle className="w-4 h-4 text-destructive ml-auto" />}
-          </button>
-        );
-      })}
-    </div>
-  </div>
-);
 
 export default TrainingPage;
